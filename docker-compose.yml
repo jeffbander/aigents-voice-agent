@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  voice-bridge:
+    build:
+      context: ./services/voice-bridge
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=development
+      - PORT=8080
+      - PUBLIC_ORIGIN=${PUBLIC_ORIGIN:-http://localhost:8080}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_REALTIME_MODEL=${OPENAI_REALTIME_MODEL:-gpt-realtime}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_FROM_NUMBER=${TWILIO_FROM_NUMBER}
+      - TWIML_URL=${TWIML_URL:-http://localhost:8080/twiml}
+      - AIGENTS_HMAC_SECRET=${AIGENTS_HMAC_SECRET:-dev-secret-change-me}
+      - BIOMARKER_WS=ws://biomarker-service:9091/ingest
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      - biomarker-service
+    volumes:
+      - ./services/voice-bridge/src:/app/src:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  biomarker-service:
+    build:
+      context: ./packages/biomarker-service
+      dockerfile: Dockerfile
+    ports:
+      - "9091:9091"
+    environment:
+      - BIOMARKER_HOST=0.0.0.0
+      - BIOMARKER_PORT=9091
+    volumes:
+      - ./packages/biomarker-service:/app:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.connect(('localhost', 9091)); s.close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Optional: Local PostgreSQL for development (if not using Neon)
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=aigents_voice
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: unless-stopped
+    profiles:
+      - local-db
+
+  # Optional: Redis for session storage (if needed)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    profiles:
+      - cache
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: aigents-voice-network
+
