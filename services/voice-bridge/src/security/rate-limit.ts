@@ -5,31 +5,18 @@ import { createRequestLogger } from '../utils/logger';
 
 // Create rate limiters for different endpoints
 const aigentsRateLimiter = new RateLimiterMemory({
-  keyGenerator: (req: Request) => {
-    // Rate limit by IP address for AIGENTS endpoints
-    return req.ip || 'unknown';
-  },
   points: ENV.RATE_LIMIT_MAX_REQUESTS, // Number of requests
   duration: Math.floor(ENV.RATE_LIMIT_WINDOW_MS / 1000), // Per duration in seconds
   blockDuration: 60, // Block for 60 seconds if limit exceeded
 });
 
 const webhookRateLimiter = new RateLimiterMemory({
-  keyGenerator: (req: Request) => {
-    // Rate limit by IP address for webhook endpoints
-    return req.ip || 'unknown';
-  },
   points: ENV.RATE_LIMIT_MAX_REQUESTS * 2, // More lenient for webhooks
   duration: Math.floor(ENV.RATE_LIMIT_WINDOW_MS / 1000),
   blockDuration: 30, // Shorter block duration for webhooks
 });
 
 const twilioRateLimiter = new RateLimiterMemory({
-  keyGenerator: (req: Request) => {
-    // Rate limit by Twilio Account SID if available, otherwise IP
-    const accountSid = req.body?.AccountSid || req.query?.AccountSid;
-    return accountSid || req.ip || 'unknown';
-  },
   points: 1000, // Very high limit for Twilio (they have their own rate limiting)
   duration: 60, // Per minute
   blockDuration: 10, // Short block duration
@@ -138,7 +125,6 @@ export function createTwilioRateLimit() {
  */
 export function createGeneralRateLimit(points: number = 100, durationSec: number = 900) {
   const limiter = new RateLimiterMemory({
-    keyGenerator: (req: Request) => req.ip || 'unknown',
     points,
     duration: durationSec,
     blockDuration: 60,

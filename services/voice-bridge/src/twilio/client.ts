@@ -132,7 +132,7 @@ export async function getCallDetails(callSid: string) {
 /**
  * Update a call in progress (e.g., to redirect to a new TwiML URL)
  */
-export async function updateCall(callSid: string, updates: { url?: string; method?: string; status?: string }) {
+export async function updateCall(callSid: string, updates: { url?: string; method?: string; status?: 'canceled' | 'completed' }) {
   const callLogger = logger.child({
     component: 'twilio-client',
     callSid,
@@ -141,7 +141,7 @@ export async function updateCall(callSid: string, updates: { url?: string; metho
   try {
     callLogger.info('Updating call', { updates });
     
-    const call = await twilioClient.calls(callSid).update(updates);
+    const call = await twilioClient.calls(callSid).update(updates as any);
     
     callLogger.info('Call updated successfully', {
       status: call.status,

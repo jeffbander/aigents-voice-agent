@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import twilio from 'twilio';
-import { ENV } from '../utils/env';
 import { createRequestLogger } from '../utils/logger';
 import { repo } from '../db/repo';
 
@@ -24,10 +23,15 @@ export async function twimlHandler(req: Request, res: Response): Promise<void> {
     
     // Start Media Streams for real-time audio processing
     const start = twiml.start();
-    start.stream({
+    
+    // Create stream with parameters - Twilio will pass these as custom parameters
+    const stream = start.stream({
       url: `wss://${req.get('host')}/twilio-stream`,
       track: 'both_tracks', // Capture both inbound and outbound audio
     });
+    
+    // Add custom parameters that Twilio will pass in the WebSocket connection
+    stream.parameter({ name: 'callSid', value: req.body.CallSid });
     
     // Provide initial greeting while WebSocket connection establishes
     twiml.say({

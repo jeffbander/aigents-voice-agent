@@ -1,0 +1,521 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  background: #f5f5f5;
+  color: #333;
+}
+
+.App {
+  min-height: 100vh;
+}
+
+.App-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 2rem;
+  text-align: center;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.App-header h1 {
+  margin-bottom: 0.5rem;
+  font-size: 2rem;
+}
+
+.App-header p {
+  opacity: 0.9;
+  font-size: 0.9rem;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.row {
+  display: flex;
+  gap: 2rem;
+}
+
+.col-md-6 {
+  flex: 1;
+}
+
+/* Form Styles */
+.call-trigger-form {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.call-trigger-form h2 {
+  margin-bottom: 1.5rem;
+  color: #667eea;
+}
+
+.form-section {
+  margin-bottom: 2rem;
+}
+
+.form-section h3 {
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  color: #555;
+  border-bottom: 2px solid #f0f0f0;
+  padding-bottom: 0.5rem;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-weight: 500;
+  color: #666;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.form-group input[type="checkbox"] {
+  width: auto;
+  margin-right: 0.5rem;
+}
+
+.submit-button {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 0.75rem 2rem;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.submit-button:hover {
+  background: #5a67d8;
+}
+
+.submit-button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* Response Messages */
+.response-message {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 4px;
+}
+
+.response-message.success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.response-message.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+/* Call Queue */
+.call-queue {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.queue-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.queue-header h3 {
+  color: #667eea;
+}
+
+.refresh-button {
+  background: #f0f0f0;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.queue-position {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #999;
+  margin-right: 1rem;
+}
+
+.queue-details {
+  flex: 1;
+}
+
+.queue-phone {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.queue-meta {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.priority {
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.priority.normal {
+  background: #e7f5ff;
+  color: #0c8ce9;
+}
+
+.priority.high {
+  background: #fff5f5;
+  color: #e03131;
+}
+
+.cancel-button {
+  background: #ff6b6b;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Call Monitor */
+.call-monitor {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.call-monitor h3 {
+  margin-bottom: 1rem;
+  color: #667eea;
+}
+
+.monitor-header {
+  margin-bottom: 1.5rem;
+}
+
+.call-info {
+  display: flex;
+  gap: 2rem;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.risk-display {
+  margin-bottom: 1.5rem;
+}
+
+.risk-display h4 {
+  margin-bottom: 0.5rem;
+  color: #555;
+}
+
+.risk-gauge {
+  margin-bottom: 1rem;
+}
+
+.risk-value {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.risk-bar {
+  height: 20px;
+  background: #f0f0f0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.risk-fill {
+  height: 100%;
+  transition: width 0.3s;
+}
+
+/* Voice Tasks */
+.voice-tasks {
+  margin-bottom: 1.5rem;
+}
+
+.voice-tasks h4 {
+  margin-bottom: 0.5rem;
+  color: #555;
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.task-item {
+  padding: 0.5rem;
+  background: #f8f8f8;
+  border-radius: 4px;
+}
+
+.task-item.completed {
+  background: #d4edda;
+  color: #155724;
+}
+
+/* Symptoms Tracker */
+.symptoms-tracker {
+  margin-bottom: 1.5rem;
+}
+
+.symptoms-tracker h4 {
+  margin-bottom: 0.5rem;
+  color: #555;
+}
+
+.symptom-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.symptom {
+  padding: 0.5rem;
+  background: #f8f8f8;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.symptom.detected {
+  background: #fff3cd;
+  color: #856404;
+}
+
+/* Transcript */
+.transcript h4 {
+  margin-bottom: 0.5rem;
+  color: #555;
+}
+
+.transcript-box {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  padding: 1rem;
+  background: #fafafa;
+}
+
+.transcript-entry {
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+}
+
+.transcript-entry.user {
+  background: #e3f2fd;
+  margin-left: 2rem;
+}
+
+.transcript-entry.assistant {
+  background: #f3e5f5;
+  margin-right: 2rem;
+}
+
+.speaker {
+  font-weight: bold;
+  margin-right: 0.5rem;
+}
+
+/* Results Display */
+.results-display {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.results-display h3 {
+  margin-bottom: 1rem;
+  color: #667eea;
+}
+
+.recent-calls {
+  margin-top: 1rem;
+}
+
+.calls-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.call-item {
+  padding: 1rem;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.call-item:hover {
+  background: #f8f8f8;
+}
+
+.call-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.call-status {
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.8rem;
+}
+
+.call-status.completed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.call-status.failed {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.call-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.9rem;
+  color: #666;
+  margin-bottom: 0.25rem;
+}
+
+.risk-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.risk-badge.low {
+  background: #d4edda;
+  color: #155724;
+}
+
+.risk-badge.moderate {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.risk-badge.high {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* Selected Call Details */
+.selected-call-details {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  border-radius: 8px;
+  padding: 2rem;
+  max-width: 800px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  z-index: 1000;
+}
+
+.summary-content {
+  margin-top: 1rem;
+}
+
+.summary-content h5 {
+  margin-bottom: 0.5rem;
+  color: #555;
+}
+
+.recommendation {
+  padding: 1rem;
+  background: #e7f5ff;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+
+.red-flags {
+  padding: 1rem;
+  background: #fff5f5;
+  color: #e03131;
+  border-radius: 4px;
+  margin: 1rem 0;
+  font-weight: bold;
+}
+
+.close-details {
+  margin-top: 1rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .row {
+    flex-direction: column;
+  }
+  
+  .selected-call-details {
+    width: 90%;
+    max-width: none;
+  }
+}

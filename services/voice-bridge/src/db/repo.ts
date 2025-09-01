@@ -1,7 +1,7 @@
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { db } from './drizzle';
 import { automationLogs, calls, callEvents, customChains } from './schema';
-import type { NewAutomationLog, NewCall, NewCallEvent, Call } from './schema';
+import type { NewAutomationLog, NewCall, Call } from './schema';
 
 export class DatabaseRepository {
   // Automation Logs operations
@@ -10,12 +10,12 @@ export class DatabaseRepository {
     return result;
   }
 
-  async updateAutomationLogStatus(chainRunId: string, status: string, agentResponse?: string) {
+  async updateAutomationLogStatus(chainRunId: string, status: string, agentResponse?: string | undefined) {
     const [result] = await db
       .update(automationLogs)
       .set({
         status,
-        agentResponse,
+        agentResponse: agentResponse ?? null,
         agentReceivedAt: new Date(),
         isCompleted: status === 'completed',
       })
@@ -126,10 +126,34 @@ export class DatabaseRepository {
     return results;
   }
 
+  // Get calls by status
+  async getCallsByStatus(status: string, limit: number = 10) {
+    const results = await db
+      .select()
+      .from(calls)
+      .where(eq(calls.status, status))
+      .orderBy(desc(calls.createdAt))
+      .limit(limit);
+    return results;
+  }
+
+  // Update call SID
+  async updateCallSid(callId: number, callSid: string) {
+    const [result] = await db
+      .update(calls)
+      .set({
+        callSid,
+        updatedAt: new Date(),
+      })
+      .where(eq(calls.id, callId))
+      .returning();
+    return result;
+  }
+
   // Health check
   async healthCheck() {
     try {
-      const [result] = await db.select().from(automationLogs).limit(1);
+      const [_result] = await db.select().from(automationLogs).limit(1);
       return { status: 'healthy', timestamp: new Date().toISOString() };
     } catch (error) {
       return { status: 'unhealthy', error: error instanceof Error ? error.message : 'Unknown error' };

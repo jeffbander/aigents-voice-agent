@@ -5,7 +5,6 @@ import { createRequestLogger } from '../utils/logger';
 import {
   AigentsWebhookRequestSchema,
   safeValidateRequest,
-  type AigentsWebhookRequest,
   type AigentsWebhookResponse,
 } from '../types/contracts';
 
@@ -18,7 +17,7 @@ router.use(createWebhookRateLimit());
  * POST /webhook/agents
  * Receive structured results from the voice agent
  */
-router.post('/agents', async (req: Request, res: Response) => {
+router.post('/agents', async (req: Request, res: Response): Promise<Response> => {
   const logger = createRequestLogger(req);
   
   try {
@@ -131,7 +130,7 @@ router.post('/agents', async (req: Request, res: Response) => {
       chainRunId: webhookData.chainRunId,
     });
 
-    res.status(200).json(response);
+    return res.status(200).json(response);
 
   } catch (error) {
     logger.error('Error processing agent webhook', { error });
@@ -143,7 +142,7 @@ router.post('/agents', async (req: Request, res: Response) => {
       error: error instanceof Error ? error.message : 'Unknown error',
     };
 
-    res.status(500).json(response);
+    return res.status(500).json(response);
   }
 });
 
@@ -215,7 +214,7 @@ router.get('/health', async (req: Request, res: Response) => {
 /**
  * Middleware to log all webhook requests for debugging
  */
-router.use('*', (req: Request, res: Response, next) => {
+router.use('*', (req: Request, _res: Response, next) => {
   const logger = createRequestLogger(req);
   
   logger.debug('Webhook request received', {

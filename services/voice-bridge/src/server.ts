@@ -1,6 +1,7 @@
 import express from 'express';
 import http from 'http';
-import WebSocket, { WebSocketServer } from 'ws';
+import { WebSocketServer } from 'ws';
+import { Server } from 'socket.io';
 import helmet from 'helmet';
 import cors from 'cors';
 import { ENV, validateEnvironment } from './utils/env';
@@ -11,6 +12,7 @@ import { createGeneralRateLimit } from './security/rate-limit';
 import { handleTwilioStream } from './realtime/bridge';
 import aigentsRouter from './routes/aigents';
 import webhookRouter from './routes/webhook';
+import { testingRouter } from './routes/testing';
 
 // Validate environment variables on startup
 validateEnvironment();
@@ -21,11 +23,22 @@ const app = express();
 // Create HTTP server
 const server = http.createServer(app);
 
-// Create WebSocket server
+// Create WebSocket server for Twilio
 const wss = new WebSocketServer({ 
   server,
   path: '/twilio-stream',
 });
+
+// Create Socket.io server for real-time updates
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+// Make io globally available for broadcasting
+(global as any).io = io;
 
 // Middleware for parsing raw body (needed for signature verification)
 app.use('/twilio-status', express.raw({ type: 'application/x-www-form-urlencoded' }));
@@ -68,7 +81,7 @@ app.use((req, res, next) => {
 });
 
 // Health check endpoint
-app.get('/healthz', (req, res) => {
+app.get('/healthz', (_req, res) => {
   res.status(200).json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -78,7 +91,7 @@ app.get('/healthz', (req, res) => {
 });
 
 // Root endpoint
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
   res.json({
     service: 'AIGENTS Voice Bridge',
     version: process.env.npm_package_version || '1.0.0',
@@ -125,6 +138,12 @@ app.use('/aigents', aigentsRouter);
 // Webhook routes
 app.use('/webhook', webhookRouter);
 
+// Testing routes (only in development)
+if (ENV.NODE_ENV !== 'production') {
+  app.use('/test', testingRouter);
+  logger.info('Test interface enabled at /test');
+}
+
 // WebSocket connection handling
 wss.on('connection', async (ws, request) => {
   const wsLogger = logger.child({
@@ -155,7 +174,7 @@ wss.on('error', (error) => {
 });
 
 // Error handling middleware
-app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((error: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error('Unhandled application error', {
     error: error.message,
     stack: error.stack,
@@ -208,7 +227,7 @@ process.on('SIGINT', () => {
 });
 
 // Unhandled promise rejection handling
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason, _promise) => {
   logger.error('Unhandled promise rejection', {
     reason: reason instanceof Error ? reason.message : reason,
     stack: reason instanceof Error ? reason.stack : undefined,

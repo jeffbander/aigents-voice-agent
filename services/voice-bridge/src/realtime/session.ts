@@ -1,4 +1,3 @@
-import { ENV } from '../utils/env';
 import { logger } from '../utils/logger';
 import type { Patient } from '../types/contracts';
 
@@ -6,9 +5,9 @@ export interface SessionContext {
   chainRunId: string;
   patient: Patient;
   callObjective: string;
-  clinicalContext?: string;
+  clinicalContext?: string | undefined;
   callbackUrl: string;
-  callSid?: string;
+  callSid?: string | undefined;
 }
 
 /**
@@ -353,7 +352,7 @@ export function createSessionContext(
   patient: Patient,
   callObjective: string,
   callbackUrl: string,
-  clinicalContext?: string,
+  clinicalContext?: string | undefined,
   callSid?: string
 ): SessionContext {
   return {

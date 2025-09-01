@@ -8,7 +8,7 @@ scikit-learn>=1.3.0
 # Audio processing
 librosa>=0.10.0
 soundfile>=0.12.0
-pyaudio>=0.2.11
+# pyaudio>=0.2.11  # Commented out - requires system portaudio libs
 
 # openSMILE for feature extraction
 # Note: openSMILE Python bindings may need to be installed separately

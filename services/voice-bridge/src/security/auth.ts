@@ -84,8 +84,6 @@ export function verifyJWT(req: Request, res: Response, next: NextFunction): void
       return;
     }
 
-    const token = authHeader.substring(7);
-    
     // JWT verification would go here if needed
     // For now, just pass through
     logger.debug('JWT verification skipped (not implemented)');

@@ -78,30 +78,19 @@ export async function handleTwilioStream(
   twilioWS: WebSocket, 
   request: any
 ): Promise<void> {
-  const logger = createWebSocketLogger('twilio', request.headers['x-twilio-call-sid']);
+  const logger = createWebSocketLogger('twilio', 'pending-sid');
   
   try {
-    // Extract context from request (this would be implemented based on your routing)
-    const ctx = await resolveContextFromRequest(request);
-    if (!ctx) {
-      logger.error('Failed to resolve session context');
-      twilioWS.close(1008, 'Invalid session context');
-      return;
-    }
+    // We need to wait for the start message from Twilio to get the call SID
+    let ctx: SessionContext | null = null;
+    let callSidFromStart: string | null = null;
 
-    logger.info('Starting Twilio stream bridge', {
-      chainRunId: ctx.chainRunId,
-      callSid: ctx.callSid,
-      patientId: ctx.patient.id,
-    });
+    logger.info('Waiting for Twilio stream to start');
 
-    // Create connections
-    const openaiWS = createOpenAIRealtimeConnection();
-    const biomarkerWS = createBiomarkerConnection();
+    // We'll initialize these after we get the context
+    let openaiWS: WebSocket | null = null;
+    let biomarkerWS: WebSocket | null = null;
     
-    // Initialize OpenAI session
-    initializeRealtimeSession(openaiWS, ctx);
-
     // Track session state
     let sessionActive = true;
     let audioFrameCount = 0;
@@ -114,22 +103,158 @@ export async function handleTwilioStream(
         
         switch (message.event) {
           case 'start':
+            // Log the entire start message to debug
+            logger.info('Received Twilio start message', { 
+              start: message.start,
+              customParameters: message.start?.customParameters,
+              callSid: message.start?.callSid 
+            });
+            
+            // Extract call SID from start message - Twilio sends it directly in the start object
+            callSidFromStart = message.start?.callSid;
+            
+            if (!callSidFromStart) {
+              // Try custom parameters as fallback
+              const customParams = message.start?.customParameters;
+              if (customParams) {
+                // Custom parameters might be an object or array
+                if (Array.isArray(customParams)) {
+                  const callSidParam = customParams.find(p => p.name === 'callSid');
+                  callSidFromStart = callSidParam?.value;
+                } else if (customParams.callSid) {
+                  callSidFromStart = customParams.callSid;
+                }
+              }
+            }
+            
+            if (!callSidFromStart) {
+              logger.error('No call SID found in start message', { 
+                start: message.start,
+                customParameters: message.start?.customParameters 
+              });
+              twilioWS.close(1008, 'No call SID provided');
+              return;
+            }
+            
+            // Now resolve the context using the call SID
+            ctx = await resolveContextFromCallSid(callSidFromStart);
+            if (!ctx) {
+              logger.error('Failed to resolve context for call', { callSid: callSidFromStart });
+              twilioWS.close(1008, 'Invalid session context');
+              return;
+            }
+            
+            logger.info('Context resolved, initializing OpenAI connection', {
+              chainRunId: ctx.chainRunId,
+              callSid: callSidFromStart,
+              patientId: ctx.patient.id,
+            });
+            
+            // Now create and initialize the OpenAI connection
+            openaiWS = createOpenAIRealtimeConnection();
+            biomarkerWS = createBiomarkerConnection();
+            initializeRealtimeSession(openaiWS, ctx);
+            
+            // Handle OpenAI Realtime responses
+            openaiWS.on('message', async (data) => {
+              try {
+                const message = JSON.parse(data.toString());
+                
+                switch (message.type) {
+                  case 'response.audio.delta':
+                    // Forward audio to Twilio
+                    if (sessionActive && message.delta) {
+                      twilioWS.send(JSON.stringify({
+                        event: 'media',
+                        media: {
+                          payload: message.delta,
+                        },
+                      }));
+                    }
+                    break;
+                    
+                  case 'response.function_call':
+                    await handleFunctionCall(message, ctx!, logger);
+                    break;
+                    
+                  case 'error':
+                    logger.error('OpenAI Realtime error', { error: message });
+                    break;
+                    
+                  default:
+                    logger.debug('OpenAI Realtime message', { type: message.type });
+                }
+              } catch (error) {
+                logger.error('Error processing OpenAI message', { error });
+              }
+            });
+            
+            // Handle biomarker responses
+            if (biomarkerWS) {
+              biomarkerWS.on('message', async (data) => {
+                try {
+                  const message = JSON.parse(data.toString());
+                  
+                  if (message.type === 'risk' && message.chainRunId === ctx!.chainRunId) {
+                    lastBiomarkerRisk = message.risk;
+                    
+                    // Update database with risk score
+                    if (ctx!.callSid) {
+                      await repo.updateCallRisk(ctx!.callSid, message.risk);
+                    }
+                    
+                    // If risk is high, send advisory to OpenAI
+                    if (message.risk >= 0.8 && openaiWS) {
+                      logger.warn('High biomarker risk detected', { 
+                        risk: message.risk,
+                        status: message.status 
+                      });
+                      
+                      openaiWS.send(JSON.stringify({
+                        type: 'conversation.item.create',
+                        item: {
+                          type: 'message',
+                          role: 'system',
+                          content: [{
+                            type: 'text',
+                            text: `ALERT: Voice biomarker analysis indicates elevated risk (${(message.risk * 100).toFixed(1)}%). Please recheck for red flag symptoms and consider escalation if appropriate.`,
+                          }],
+                        },
+                      }));
+                    }
+                    
+                    logger.debug('Biomarker risk update', { 
+                      risk: message.risk, 
+                      status: message.status,
+                      n: message.n 
+                    });
+                  }
+                } catch (error) {
+                  logger.error('Error processing biomarker message', { error });
+                }
+              });
+            }
+            
             await handleTwilioStart(message as TwilioStartEvent, ctx, logger);
             break;
             
           case 'media':
-            await handleTwilioMedia(
-              message as TwilioMediaEvent, 
-              openaiWS, 
-              biomarkerWS, 
-              ctx, 
-              logger
-            );
-            audioFrameCount++;
+            if (openaiWS && ctx) {
+              await handleTwilioMedia(
+                message as TwilioMediaEvent, 
+                openaiWS, 
+                biomarkerWS, 
+                ctx, 
+                logger
+              );
+              audioFrameCount++;
+            }
             break;
             
           case 'stop':
-            await handleTwilioStop(message as TwilioStopEvent, ctx, logger);
+            if (ctx) {
+              await handleTwilioStop(message as TwilioStopEvent, ctx, logger);
+            }
             sessionActive = false;
             break;
             
@@ -141,91 +266,12 @@ export async function handleTwilioStream(
       }
     });
 
-    // Handle OpenAI Realtime responses
-    openaiWS.on('message', async (data) => {
-      try {
-        const message = JSON.parse(data.toString());
-        
-        switch (message.type) {
-          case 'response.audio.delta':
-            // Forward audio to Twilio
-            if (sessionActive && message.delta) {
-              twilioWS.send(JSON.stringify({
-                event: 'media',
-                media: {
-                  payload: message.delta,
-                },
-              }));
-            }
-            break;
-            
-          case 'response.function_call':
-            await handleFunctionCall(message, ctx, logger);
-            break;
-            
-          case 'error':
-            logger.error('OpenAI Realtime error', { error: message });
-            break;
-            
-          default:
-            logger.debug('OpenAI Realtime message', { type: message.type });
-        }
-      } catch (error) {
-        logger.error('Error processing OpenAI message', { error });
-      }
-    });
-
-    // Handle biomarker responses
-    if (biomarkerWS) {
-      biomarkerWS.on('message', async (data) => {
-        try {
-          const message = JSON.parse(data.toString());
-          
-          if (message.type === 'risk' && message.chainRunId === ctx.chainRunId) {
-            lastBiomarkerRisk = message.risk;
-            
-            // Update database with risk score
-            if (ctx.callSid) {
-              await repo.updateCallRisk(ctx.callSid, message.risk);
-            }
-            
-            // If risk is high, send advisory to OpenAI
-            if (message.risk >= 0.8) {
-              logger.warn('High biomarker risk detected', { 
-                risk: message.risk,
-                status: message.status 
-              });
-              
-              openaiWS.send(JSON.stringify({
-                type: 'conversation.item.create',
-                item: {
-                  type: 'message',
-                  role: 'system',
-                  content: [{
-                    type: 'text',
-                    text: `ALERT: Voice biomarker analysis indicates elevated risk (${(message.risk * 100).toFixed(1)}%). Please recheck for red flag symptoms and consider escalation if appropriate.`,
-                  }],
-                },
-              }));
-            }
-            
-            logger.debug('Biomarker risk update', { 
-              risk: message.risk, 
-              status: message.status,
-              n: message.n 
-            });
-          }
-        } catch (error) {
-          logger.error('Error processing biomarker message', { error });
-        }
-      });
-    }
 
     // Handle connection cleanup
     const cleanup = () => {
       sessionActive = false;
       
-      if (openaiWS.readyState === WebSocket.OPEN) {
+      if (openaiWS && openaiWS.readyState === WebSocket.OPEN) {
         openaiWS.close();
       }
       
@@ -256,7 +302,7 @@ export async function handleTwilioStream(
  */
 async function handleTwilioStart(
   message: TwilioStartEvent, 
-  ctx: SessionContext, 
+  _ctx: SessionContext, 
   logger: any
 ): Promise<void> {
   logger.info('Twilio stream started', {
@@ -293,7 +339,7 @@ async function handleTwilioMedia(
   openaiWS: WebSocket,
   biomarkerWS: WebSocket | null,
   ctx: SessionContext,
-  logger: any
+  _logger: any
 ): Promise<void> {
   // Forward audio to OpenAI Realtime
   if (openaiWS.readyState === WebSocket.OPEN && message.media.track === 'inbound') {
@@ -321,7 +367,7 @@ async function handleTwilioMedia(
  */
 async function handleTwilioStop(
   message: TwilioStopEvent,
-  ctx: SessionContext,
+  _ctx: SessionContext,
   logger: any
 ): Promise<void> {
   logger.info('Twilio stream stopped', {
@@ -360,8 +406,6 @@ async function handleFunctionCall(
   });
 
   try {
-    let result = { ok: true };
-
     switch (message.name) {
       case 'return_to_aigents':
         const payload = JSON.parse(message.arguments || '{}');
@@ -476,17 +520,105 @@ async function handleEscalation(
 }
 
 /**
+ * Resolve session context from call SID
+ * Retrieves context from database using the call SID
+ */
+async function resolveContextFromCallSid(callSid: string): Promise<SessionContext | null> {
+  const logger = createWebSocketLogger('twilio', callSid);
+  
+  try {
+    logger.debug('Resolving context for call', { callSid });
+    
+    // Look up the call in the database
+    const call = await repo.getCallByCallSid(callSid);
+    if (!call) {
+      logger.error('Call not found in database', { callSid });
+      return null;
+    }
+    
+    // Parse the stored context
+    const context = call.context as any;
+    if (!context) {
+      logger.error('No context stored for call', { callSid });
+      return null;
+    }
+    
+    // Return the session context
+    const sessionContext: SessionContext = {
+      chainRunId: call.chainRunId,
+      patient: context.patient,
+      callObjective: context.callObjective,
+      clinicalContext: context.clinicalContext,
+      callbackUrl: call.callbackUrl,
+      callSid: callSid
+    };
+    
+    logger.info('Context resolved successfully', { 
+      chainRunId: sessionContext.chainRunId,
+      callSid 
+    });
+    
+    return sessionContext;
+    
+  } catch (error) {
+    logger.error('Failed to resolve context from call SID', { error, callSid });
+    return null;
+  }
+}
+
+/**
  * Resolve session context from WebSocket request
- * This is a placeholder - implement based on your routing strategy
+ * Extracts call SID from URL and retrieves context from database
  */
 async function resolveContextFromRequest(request: any): Promise<SessionContext | null> {
-  // This would typically:
-  // 1. Extract call SID from Twilio headers
-  // 2. Look up the call in the database
-  // 3. Return the stored context
+  const logger = createWebSocketLogger('twilio', 'context-resolution');
   
-  // For now, return a mock context
-  // TODO: Implement proper context resolution
-  return null;
+  try {
+    // Extract call SID from URL query params
+    const url = new URL(request.url, `http://${request.headers.host}`);
+    const callSid = url.searchParams.get('callSid');
+    
+    if (!callSid) {
+      logger.error('No call SID provided in WebSocket URL');
+      return null;
+    }
+    
+    logger.debug('Resolving context for call', { callSid });
+    
+    // Look up the call in the database
+    const call = await repo.getCallByCallSid(callSid);
+    if (!call) {
+      logger.error('Call not found in database', { callSid });
+      return null;
+    }
+    
+    // Parse the stored context
+    const context = call.context as any;
+    if (!context) {
+      logger.error('No context stored for call', { callSid });
+      return null;
+    }
+    
+    // Return the session context
+    const sessionContext: SessionContext = {
+      chainRunId: call.chainRunId,
+      patient: context.patient,
+      callObjective: context.callObjective,
+      clinicalContext: context.clinicalContext,
+      callbackUrl: call.callbackUrl,
+      callSid: callSid
+    };
+    
+    logger.info('Context resolved successfully', { 
+      chainRunId: sessionContext.chainRunId,
+      callSid 
+    });
+    
+    return sessionContext;
+    
+  } catch (error) {
+    logger.error('Failed to resolve context from request', { error });
+    return null;
+  }
 }
 
